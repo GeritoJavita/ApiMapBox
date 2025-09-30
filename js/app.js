@@ -1,5 +1,5 @@
 /* app.js — Mapbox improved UI + 10 POIs Bogotá
-   Nota: reemplaza mapboxgl.accessToken si lo deseas.
+ 
 */
 mapboxgl.accessToken = 'pk.eyJ1IjoibWFwYm94ZGllZ28wMTYiLCJhIjoiY21nNXJteXF2MDg2ZjJqcTRhaXRnbXM4ZyJ9.fQ-ZdM9lekGoKReBp5x40Q';
 
