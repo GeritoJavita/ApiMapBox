@@ -1,38 +1,142 @@
-body {
-  margin: 0;
-  padding: 0;
-  font-family: "Segoe UI", sans-serif;
+:root{
+  --bg: #f6f9f8;
+  --card: rgba(255,255,255,0.95);
+  --accent: #6fb3b8; /* pastel teal */
+  --muted: #6b7280;
+  --shadow: 0 6px 18px rgba(33,37,41,0.08);
+  --glass: rgba(255,255,255,0.6);
+  --radius: 12px;
 }
 
-#map {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 100%;
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font-family:Inter, "Segoe UI", Roboto, system-ui, -apple-system, "Helvetica Neue", Arial;}
+body{background:linear-gradient(180deg,#f2fbfb 0%, #f6f9f8 100%);}
+
+/* Map takes full screen */
+#map{
+  position:fixed;
+  inset:0;
+  z-index:0;
 }
 
-.map-controls {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+/* Sidebar */
+.sidebar{
+  position:fixed;
+  top:20px;
+  left:20px;
+  width:320px;
+  max-width:calc(100% - 40px);
+  height:calc(100% - 40px);
+  background:var(--card);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+  padding:14px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  z-index:2;
+  backdrop-filter: blur(6px);
 }
 
-.map-controls button {
-  background: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 12px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-  transition: background 0.2s;
+.sidebar-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+.sidebar-header h2{
+  font-size:1.05rem;
+  margin:0;
+  color:#0f172a;
+}
+.sidebar-actions button{
+  background:transparent;
+  border:none;
+  padding:6px 8px;
+  border-radius:8px;
+  cursor:pointer;
+  font-weight:600;
+  color:var(--muted);
+}
+.sidebar-actions button:hover{background:#f0f6f6}
+
+/* Search */
+.search-box input{
+  width:100%;
+  padding:10px 12px;
+  border-radius:10px;
+  border:1px solid rgba(15,23,42,0.06);
+  outline:none;
+  box-shadow:0 2px 6px rgba(11,12,15,0.03);
 }
 
-.map-controls button:hover {
-  background: #f0f0f0;
+/* POI list */
+.poi-list{
+  list-style:none;
+  margin:0;
+  padding:0;
+  overflow:auto;
+}
+.poi-item{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  padding:10px;
+  border-radius:10px;
+  transition:transform .12s ease, background .12s ease;
+  cursor:default;
+}
+.poi-item + .poi-item{margin-top:8px;}
+.poi-item:hover{transform:translateY(-4px); background:rgba(11,12,15,0.02);}
+
+.marker-mini{
+  width:44px; height:44px; border-radius:10px;
+  display:flex; align-items:center; justify-content:center;
+  background:linear-gradient(180deg,#fff,#f3fbfb);
+  box-shadow:0 6px 14px rgba(0,0,0,0.06);
+  font-size:20px;
+}
+
+/* Labels */
+.poi-info{flex:1}
+.poi-info h4{margin:0;font-size:0.98rem;color:#071133}
+.poi-info p{margin:4px 0 0;font-size:0.85rem;color:var(--muted)}
+
+/* Buttons inside list */
+.poi-actions{display:flex; gap:6px; margin-left:8px}
+.poi-actions button{
+  background:var(--accent);
+  border:none;color:white;padding:6px 8px;border-radius:8px;font-weight:700;cursor:pointer;
+}
+.poi-actions button.ghost{background:transparent;color:var(--accent);border:1px solid rgba(111,179,184,0.18)}
+
+/* Controls floating */
+.controls{
+  position:fixed;
+  right:20px;
+  top:20px;
+  z-index:3;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.controls-group{
+  background:var(--card);
+  border-radius:10px; padding:8px; box-shadow:var(--shadow);
+  display:flex; gap:8px; align-items:center;
+}
+.controls button{
+  background:var(--accent); color:white; border:none; width:40px; height:40px; border-radius:8px; cursor:pointer; font-weight:700; font-size:18px;
+}
+.controls select{
+  border-radius:8px; padding:8px; border:1px solid rgba(15,23,42,0.06);
+}
+
+/* Footer note in sidebar */
+.sidebar-footer{margin-top:auto; font-size:0.8rem; color:var(--muted); text-align:center;}
+
+/* Responsive */
+@media(max-width:880px){
+  .sidebar{width:86%; height:320px; left:50%; transform:translateX(-50%); top:14px;}
+  #map{top:0}
 }
