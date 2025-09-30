@@ -1,102 +1,66 @@
-let map, searchManager;
-let pushpins = [];
+mapboxgl.accessToken = 'pk.eyJ1IjoibWFwYm94ZGllZ28wMTYiLCJhIjoiY21nNXJteXF2MDg2ZjJqcTRhaXRnbXM4ZyJ9.fQ-ZdM9lekGoKReBp5x40Q';
 
-const bogotaCenter = new Microsoft.Maps.Location(4.711, -74.072);
+const map = new mapboxgl.Map({
+  container: 'map',
+  style: 'mapbox://styles/mapbox/streets-v12',
+  center: [-74.08175, 4.60971], // Bogotá centro
+  zoom: 12
+});
 
-// 10 puntos de interés en Bogotá
-const puntos = [
-  { title: "Monserrate", desc: "Santuario icónico con vista de la ciudad.", loc: new Microsoft.Maps.Location(4.605, -74.056) },
-  { title: "Plaza de Bolívar", desc: "Plaza principal con edificios históricos.", loc: new Microsoft.Maps.Location(4.598, -74.077) },
-  { title: "Museo del Oro", desc: "Famoso museo con colección precolombina.", loc: new Microsoft.Maps.Location(4.601, -74.072) },
-  { title: "Jardín Botánico", desc: "Espacio natural y educativo de Bogotá.", loc: new Microsoft.Maps.Location(4.663, -74.094) },
-  { title: "Parque Simón Bolívar", desc: "Parque urbano más grande de la ciudad.", loc: new Microsoft.Maps.Location(4.658, -74.094) },
-  { title: "Usaquén", desc: "Barrio colonial con gastronomía y ferias.", loc: new Microsoft.Maps.Location(4.709, -74.036) },
-  { title: "Zona T", desc: "Área famosa por bares, restaurantes y vida nocturna.", loc: new Microsoft.Maps.Location(4.667, -74.055) },
-  { title: "Museo Botero", desc: "Colección de arte del maestro Fernando Botero.", loc: new Microsoft.Maps.Location(4.602, -74.070) },
-  { title: "Parque de la 93", desc: "Zona gastronómica y cultural al norte de Bogotá.", loc: new Microsoft.Maps.Location(4.676, -74.048) },
-  { title: "Biblioteca Virgilio Barco", desc: "Arquitectura de Rogelio Salmona y espacio cultural.", loc: new Microsoft.Maps.Location(4.648, -74.093) }
+// --- 10 puntos de interés en Bogotá ---
+const puntosInteres = [
+  { coords: [-74.0555, 4.6056], nombre: "Plaza de Bolívar" },
+  { coords: [-74.0672, 4.6016], nombre: "Museo del Oro" },
+  { coords: [-74.0561, 4.6019], nombre: "Museo Botero" },
+  { coords: [-74.0565, 4.5981], nombre: "Chorro de Quevedo" },
+  { coords: [-74.0589, 4.6050], nombre: "Catedral Primada" },
+  { coords: [-74.0617, 4.6101], nombre: "Monserrate (acceso)" },
+  { coords: [-74.0942, 4.6584], nombre: "Parque Simón Bolívar" },
+  { coords: [-74.0935, 4.6812], nombre: "Jardín Botánico" },
+  { coords: [-74.0429, 4.6935], nombre: "Zona T (Zona Rosa)" },
+  { coords: [-74.0467, 4.7001], nombre: "Parque de la 93" }
 ];
 
-// Callback inicial
-function GetMap() {
-  map = new Microsoft.Maps.Map("#map", {
-    center: bogotaCenter,
-    zoom: 12,
-    mapTypeId: Microsoft.Maps.MapTypeId.road
-  });
+puntosInteres.forEach(p => {
+  new mapboxgl.Marker()
+    .setLngLat(p.coords)
+    .setPopup(new mapboxgl.Popup().setHTML(`<b>${p.nombre}</b>`))
+    .addTo(map);
+});
 
-  // Cerrar info al hacer clic en mapa
-  Microsoft.Maps.Events.addHandler(map, "click", () => hideInfoBox());
-
-  // Botón cerrar
-  document.getElementById("btn-close").addEventListener("click", hideInfoBox);
-
-  // Búsqueda
-  document.getElementById("btn-search").addEventListener("click", () => {
-    const q = document.getElementById("search-input").value;
-    if (q) geocodeQuery(q);
-  });
-
-  // Mostrar puntos de interés al inicio
-  showAllPoints();
+// --- Funcionalidades extra ---
+function zoomIn() {
+  map.zoomIn();
 }
 
-function addPushpin({ title, desc, loc }) {
-  const pin = new Microsoft.Maps.Pushpin(loc, { title });
-  pin.metadata = { title, description: desc };
-  Microsoft.Maps.Events.addHandler(pin, "click", e => showInfoBox(e.target.metadata, loc));
-  map.entities.push(pin);
-  pushpins.push(pin);
+function zoomOut() {
+  map.zoomOut();
 }
 
-function showAllPoints() {
-  map.entities.clear();
-  pushpins = [];
-  puntos.forEach(p => addPushpin(p));
-  const locations = puntos.map(p => p.loc);
-  const bounds = Microsoft.Maps.LocationRect.fromLocations(locations);
-  map.setView({ bounds, padding: 50 });
-}
+function goToLocation() {
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(pos => {
+      map.flyTo({
+        center: [pos.coords.longitude, pos.coords.latitude],
+        zoom: 14
+      });
 
-function showInfoBox(data, loc) {
-  document.getElementById("info-title").innerText = data.title;
-  document.getElementById("info-description").innerText = data.description;
-  document.getElementById("info-box").classList.remove("hidden");
-  map.setView({ center: loc, zoom: 15 });
-}
-
-function hideInfoBox() {
-  document.getElementById("info-box").classList.add("hidden");
-}
-
-// Funciones de control
-function setMapType(type) {
-  if (type === "road") map.setView({ mapTypeId: Microsoft.Maps.MapTypeId.road });
-  if (type === "aerial") map.setView({ mapTypeId: Microsoft.Maps.MapTypeId.aerial });
-  if (type === "grayscale") map.setView({ mapTypeId: Microsoft.Maps.MapTypeId.grayscale });
-}
-function resetCenter() { map.setView({ center: bogotaCenter, zoom: 12 }); }
-function zoomIn() { map.setView({ zoom: map.getZoom() + 1 }); }
-function zoomOut() { map.setView({ zoom: map.getZoom() - 1 }); }
-
-// Geocodificación
-function geocodeQuery(query) {
-  if (!searchManager) {
-    Microsoft.Maps.loadModule("Microsoft.Maps.Search", () => {
-      searchManager = new Microsoft.Maps.Search.SearchManager(map);
-      geocodeQuery(query);
+      new mapboxgl.Marker({ color: "red" })
+        .setLngLat([pos.coords.longitude, pos.coords.latitude])
+        .setPopup(new mapboxgl.Popup().setHTML("<b>Estás aquí</b>"))
+        .addTo(map);
     });
   } else {
-    searchManager.geocode({
-      where: query,
-      callback: r => {
-        if (r && r.results && r.results.length > 0) {
-          const res = r.results[0];
-          addPushpin({ title: res.name, desc: res.address.formattedAddress, loc: res.location });
-          map.setView({ center: res.location, zoom: 14 });
-        } else alert("No se encontró resultado.");
-      },
-      errorCallback: e => alert("Error en búsqueda: " + e)
-    });
+    alert("La geolocalización no está disponible en este navegador.");
   }
+}
+
+let isSatellite = false;
+function toggleStyle() {
+  if (isSatellite) {
+    map.setStyle('mapbox://styles/mapbox/streets-v12');
+  } else {
+    map.setStyle('mapbox://styles/mapbox/satellite-v9');
+  }
+  isSatellite = !isSatellite;
 }
