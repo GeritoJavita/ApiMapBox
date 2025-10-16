@@ -1,195 +1,279 @@
-/* app.js — Mapa interactivo con POIs + buscador global + modo agregar marcador */
+// === CONFIG ===
+  mapboxgl.accessToken = 'pk.eyJ1IjoibWFwYm94ZGllZ28wMTYiLCJhIjoiY21nNXJteXF2MDg2ZjJqcTRhaXRnbXM4ZyJ9.fQ-ZdM9lekGoKReBp5x40Q';
 
-mapboxgl.accessToken = 'pk.eyJ1IjoibWFwYm94ZGllZ28wMTYiLCJhIjoiY21nNXJteXF2MDg2ZjJqcTRhaXRnbXM4ZyJ9.fQ-ZdM9lekGoKReBp5x40Q';
+  const DEFAULT_POIS = [
+    { id: 'monserrate', title: 'Cerro de Monserrate', category: 'viewpoint', coords: [-74.05639, 4.60583], desc: 'Mirador icónico con iglesia y teleférico.' },
+    { id: 'plaza-bolivar', title: 'Plaza de Bolívar', category: 'plaza', coords: [-74.07600, 4.59815], desc: 'Plaza principal del centro histórico.' },
+    { id: 'museo-oro', title: 'Museo del Oro', category: 'museum', coords: [-74.07200, 4.60192], desc: 'Gran colección precolombina de oro.' },
+    { id: 'museo-botero', title: 'Museo Botero', category: 'museum', coords: [-74.07323, 4.59665], desc: 'Colección de Fernando Botero y arte internacional.' },
+    { id: 'chorro-quevedo', title: 'Chorro de Quevedo', category: 'plaza', coords: [-74.069693, 4.597726], desc: 'Plazoleta histórica en La Candelaria.' },
+    { id: 'catedral', title: 'Catedral Primada', category: 'church', coords: [-74.07515, 4.597842], desc: 'Catedral frente a la Plaza de Bolívar.' },
+    { id: 'parque-simon', title: 'Parque Simón Bolívar', category: 'park', coords: [-74.09389, 4.65806], desc: 'El parque metropolitano más grande de Bogotá.' },
+    { id: 'jardin-botanico', title: 'Jardín Botánico', category: 'garden', coords: [-74.100198, 4.668211], desc: 'Jardín Botánico José Celestino Mutis.' },
+    { id: 'parque-93', title: 'Parque de la 93', category: 'park', coords: [-74.04835, 4.67677], desc: 'Zona gastronómica y de eventos.' },
+    { id: 'usaquen', title: 'Plaza de Usaquén', category: 'neighborhood', coords: [-74.03106, 4.69682], desc: 'Zona colonial con mercado y restaurantes.' }
+  ];
 
-// === MAPA BASE ===
-const map = new mapboxgl.Map({
-  container: 'map',
-  style: 'mapbox://styles/mapbox/streets-v12',
-  center: [-74.0721, 4.7110], // Bogotá
-  zoom: 12
-});
+  const ICONS = { viewpoint: '⛰️', plaza: '🏛️', museum: '🏺', church: '⛪', park: '🌳', garden: '🌿', neighborhood: '🏘️' };
 
-map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+  // Estado
+  let POIS = [];
+  let markers = []; // {id, marker, popup, poi}
+  let activeFilters = new Set();
+  let addMarkerMode = false;
+  let measureMode = false;
+  let measurePoints = [];
+  let routeLayerId = 'route-line';
 
-// === POIs Bogotá ===
-const POIS = [
-  { id: 'monserrate', title: 'Cerro de Monserrate', category: 'viewpoint', coords: [-74.05639, 4.60583], desc: 'Mirador icónico con iglesia y teleférico.' },
-  { id: 'plaza-bolivar', title: 'Plaza de Bolívar', category: 'plaza', coords: [-74.07600, 4.59815], desc: 'Plaza principal del centro histórico.' },
-  { id: 'museo-oro', title: 'Museo del Oro', category: 'museum', coords: [-74.07200, 4.60192], desc: 'Gran colección precolombina de oro.' },
-  { id: 'museo-botero', title: 'Museo Botero', category: 'museum', coords: [-74.07323, 4.59665], desc: 'Colección de Fernando Botero y arte internacional.' },
-  { id: 'chorro-quevedo', title: 'Chorro de Quevedo', category: 'plaza', coords: [-74.069693, 4.597726], desc: 'Plazoleta histórica en La Candelaria.' },
-  { id: 'catedral', title: 'Catedral Primada', category: 'church', coords: [-74.07515, 4.597842], desc: 'Catedral frente a la Plaza de Bolívar.' },
-  { id: 'parque-simon', title: 'Parque Simón Bolívar', category: 'park', coords: [-74.09389, 4.65806], desc: 'El parque metropolitano más grande de Bogotá.' },
-  { id: 'jardin-botanico', title: 'Jardín Botánico', category: 'garden', coords: [-74.100198, 4.668211], desc: 'Jardín Botánico José Celestino Mutis.' },
-  { id: 'parque-93', title: 'Parque de la 93', category: 'park', coords: [-74.04835, 4.67677], desc: 'Zona gastronómica y de eventos.' },
-  { id: 'usaquen', title: 'Plaza de Usaquén', category: 'neighborhood', coords: [-74.03106, 4.69682], desc: 'Zona colonial con mercado y restaurantes.' }
-];
+  // DOM refs
+  const listEl = document.getElementById('poi-list');
+  const searchInput = document.getElementById('poi-search');
+  const filtersEl = document.getElementById('filters');
+  const modal = document.getElementById('modal');
+  const mTitle = document.getElementById('m-title');
+  const mDesc = document.getElementById('m-desc');
+  const mSave = document.getElementById('m-save');
+  const mCancel = document.getElementById('m-cancel');
 
-const ICONS = {
-  viewpoint: '⛰️', plaza: '🏛️', museum: '🏺', church: '⛪', park: '🌳', garden: '🌿', neighborhood: '🏘️'
-};
+  // === MAP ===
+  const map = new mapboxgl.Map({ container: 'map', style: 'mapbox://styles/mapbox/streets-v12', center: [-74.0721,4.7110], zoom:12 });
+  map.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
-let markers = [];
-const listEl = document.getElementById('poi-list');
-const searchInput = document.getElementById('poi-search');
+  // restore POIs from localStorage if any
+  function loadSavedPOIs(){
+    try{
+      const raw = localStorage.getItem('my_pois_v1');
+      if(raw) POIS = JSON.parse(raw);
+      else POIS = DEFAULT_POIS.slice();
+    }catch(e){ POIS = DEFAULT_POIS.slice(); }
+  }
 
-// === Funciones básicas de POIs ===
-function createMarker(poi){
-  const el = document.createElement('div');
-  el.className = 'marker-mini';
-  el.textContent = ICONS[poi.category] || '📍';
+  function savePOIs(){ localStorage.setItem('my_pois_v1', JSON.stringify(POIS)); }
 
-  const popup = new mapboxgl.Popup({ offset: 14 })
-    .setHTML(`<strong>${poi.title}</strong><p>${poi.desc}</p>`);
+  // Marker creation with edit/delete actions
+  function createMarker(poi){
+    const el = document.createElement('div'); el.className = 'marker-mini'; el.textContent = ICONS[poi.category] || '📍';
 
-  const marker = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
-    .setLngLat(poi.coords)
-    .setPopup(popup)
-    .addTo(map);
+    const popupNode = document.createElement('div');
+    popupNode.innerHTML = `<strong>${poi.title}</strong><p class="muted">${poi.desc || ''}</p>`;
+    const actions = document.createElement('div'); actions.style.marginTop='8px';
 
-  return { id: poi.id, marker, popup, poi };
-}
+    const btnRoute = document.createElement('button'); btnRoute.textContent='Ruta'; btnRoute.className='chip'; btnRoute.style.marginRight='6px';
+    btnRoute.addEventListener('click', ()=> routeTo(poi.coords));
 
-function loadPOIs(){
-  markers.forEach(m => m.marker.remove());
-  markers = [];
-  POIS.forEach(p => markers.push(createMarker(p)));
-  renderPOIList(POIS);
-}
+    const btnEdit = document.createElement('button'); btnEdit.textContent='Editar'; btnEdit.className='chip'; btnEdit.style.marginRight='6px';
+    btnEdit.addEventListener('click', ()=> openEditModal(poi.id));
 
-function renderPOIList(items){
-  listEl.innerHTML = '';
-  items.forEach(item => {
-    const li = document.createElement('li');
-    li.className = 'poi-item';
-    li.innerHTML = `
-      <div class="marker-mini">${ICONS[item.category] || '📍'}</div>
-      <div class="poi-info">
-        <h4>${item.title}</h4>
-        <p>${item.desc}</p>
-      </div>
-      <div class="poi-actions">
-        <button data-id="${item.id}" class="btn-go">Ir</button>
-        <button data-id="${item.id}" class="btn-info ghost">Info</button>
-      </div>`;
-    listEl.appendChild(li);
+    const btnDelete = document.createElement('button'); btnDelete.textContent='Eliminar'; btnDelete.className='chip';
+    btnDelete.addEventListener('click', ()=>{
+      if(!confirm('Eliminar marcador?')) return; removePOI(poi.id);
+    });
+
+    actions.appendChild(btnRoute); actions.appendChild(btnEdit); actions.appendChild(btnDelete);
+    popupNode.appendChild(actions);
+
+    const popup = new mapboxgl.Popup({ offset:14 }).setDOMContent(popupNode);
+    const marker = new mapboxgl.Marker({ element:el, anchor:'bottom', draggable:true })
+      .setLngLat(poi.coords)
+      .setPopup(popup)
+      .addTo(map);
+
+    marker.on('dragend', ()=>{
+      const lngLat = marker.getLngLat();
+      const idx = POIS.findIndex(x=>x.id===poi.id);
+      if(idx>-1){ POIS[idx].coords = [lngLat.lng, lngLat.lat]; savePOIs(); }
+    });
+
+    return { id: poi.id, marker, popup, poi };
+  }
+
+  function loadPOIsOnMap(){
+    // remove existing
+    markers.forEach(m=>m.marker.remove()); markers = [];
+    POIS.forEach(p=> markers.push(createMarker(p)));
+    renderPOIList(POIS);
+  }
+
+  function renderPOIList(items){
+    listEl.innerHTML='';
+    items.forEach(item=>{
+      if(activeFilters.size && !activeFilters.has(item.category)) return;
+      const li = document.createElement('li'); li.className='poi-item';
+      li.innerHTML = `\n        <div class="marker-mini">${ICONS[item.category]||'📍'}</div>\n        <div class="poi-info"><h4>${item.title}</h4><p>${item.desc||''}</p></div>\n        <div class="poi-actions">\n          <button data-id="${item.id}" class="btn-go">Ir</button>\n          <button data-id="${item.id}" class="btn-info ghost">Info</button>\n        </div>`;
+      listEl.appendChild(li);
+    });
+  }
+
+  listEl.addEventListener('click', (e)=>{
+    if(e.target.classList.contains('btn-go')) flyToPOI(e.target.dataset.id);
+    if(e.target.classList.contains('btn-info')) markers.find(x=>x.id===e.target.dataset.id)?.popup.addTo(map);
   });
-}
 
-function flyToPOI(id){
-  const m = markers.find(x => x.id === id);
-  if(!m) return;
-  map.flyTo({ center: m.poi.coords, zoom: 15, speed: 0.9 });
-  m.popup.addTo(map);
-}
+  function flyToPOI(id){ const m = markers.find(x=>x.id===id); if(!m) return; map.flyTo({ center:m.poi.coords, zoom:15, speed:0.9 }); m.popup.addTo(map); }
 
-listEl.addEventListener('click', (e) => {
-  if(e.target.classList.contains('btn-go')) flyToPOI(e.target.dataset.id);
-  if(e.target.classList.contains('btn-info')) markers.find(x => x.id === e.target.dataset.id)?.popup.addTo(map);
-});
-
-// === Buscador global (Mapbox Geocoding API) ===
-let searchTimeout;
-searchInput.addEventListener('input', (e) => {
-  const query = e.target.value.trim();
-  if(!query) return;
-
-  clearTimeout(searchTimeout);
-  searchTimeout = setTimeout(async () => {
-    try {
-      const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxgl.accessToken}&limit=5`;
-      const res = await fetch(url);
-      const data = await res.json();
-
-      // Limpiar lista lateral y mostrar resultados
-      listEl.innerHTML = '';
-      data.features.forEach(f => {
-        const [lng, lat] = f.center;
-        const li = document.createElement('li');
-        li.className = 'poi-item';
-        li.innerHTML = `
-          <div class="marker-mini">📍</div>
-          <div class="poi-info">
-            <h4>${f.text}</h4>
-            <p>${f.place_name}</p>
-          </div>`;
-        li.addEventListener('click', () => {
-          map.flyTo({ center: [lng, lat], zoom: 14 });
-          new mapboxgl.Marker().setLngLat([lng, lat]).addTo(map)
-            .setPopup(new mapboxgl.Popup().setHTML(`<strong>${f.text}</strong><p>${f.place_name}</p>`))
-            .togglePopup();
-        });
-        listEl.appendChild(li);
+  // Filters UI
+  function renderFilters(){
+    const cats = Array.from(new Set(POIS.map(p=>p.category)));
+    filtersEl.innerHTML='';
+    cats.forEach(cat=>{
+      const btn = document.createElement('button'); btn.className='chip'; btn.textContent = `${ICONS[cat]||'📍'} ${cat}`;
+      btn.addEventListener('click', ()=>{
+        if(activeFilters.has(cat)){ activeFilters.delete(cat); btn.classList.remove('active'); }
+        else{ activeFilters.add(cat); btn.classList.add('active'); }
+        renderPOIList(POIS);
       });
-    } catch (err) {
-      console.error('Error al buscar:', err);
-    }
-  }, 400); // evita spam de peticiones
-});
+      filtersEl.appendChild(btn);
+    });
+  }
 
-// === Botón Mostrar todos los POIs ===
-document.getElementById('btn-fit').addEventListener('click', () => {
-  const locs = POIS.map(p => p.coords);
-  const bounds = locs.reduce((b, c) => b.extend(c), new mapboxgl.LngLatBounds(locs[0], locs[0]));
-  map.fitBounds(bounds, { padding: 60 });
-});
-
-// === Geolocalizar usuario ===
-document.getElementById('locate').addEventListener('click', () => {
-  if(!navigator.geolocation) return alert('Geolocalización no soportada.');
-  navigator.geolocation.getCurrentPosition(pos => {
-    const userCoords = [pos.coords.longitude, pos.coords.latitude];
-    if(window._userMarker) window._userMarker.remove();
-    window._userMarker = new mapboxgl.Marker({ color: '#ff7b00' }).setLngLat(userCoords).addTo(map);
-    map.flyTo({ center: userCoords, zoom: 14 });
+  // Buscador (geocoding simple + autocomplete)
+  let searchTimeout;
+  searchInput.addEventListener('input',(e)=>{
+    const q = e.target.value.trim(); if(!q) { renderPOIList(POIS); return; }
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(async ()=>{
+      try{
+        const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?access_token=${mapboxgl.accessToken}&limit=6&proximity=${map.getCenter().lng},${map.getCenter().lat}`;
+        const res = await fetch(url); const data = await res.json();
+        listEl.innerHTML='';
+        data.features.forEach(f=>{
+          const [lng,lat] = f.center; const li = document.createElement('li'); li.className='poi-item';
+          li.innerHTML = `\n            <div class="marker-mini">📍</div>\n            <div class="poi-info"><h4>${f.text}</h4><p>${f.place_name}</p></div>`;
+          li.addEventListener('click', ()=>{
+            map.flyTo({ center:[lng,lat], zoom:14 });
+            new mapboxgl.Marker().setLngLat([lng,lat]).addTo(map).setPopup(new mapboxgl.Popup().setHTML(`<strong>${f.text}</strong><p>${f.place_name}</p>`)).togglePopup();
+          });
+          listEl.appendChild(li);
+        });
+      }catch(err){ console.error('buscar',err);}    
+    },300);
   });
-});
 
-// === Cambiar estilo ===
-document.getElementById('style-select').addEventListener('change', e => {
-  map.setStyle('mapbox://styles/' + e.target.value);
-});
+  // Fit all button
+  document.getElementById('btn-fit').addEventListener('click', ()=>{
+    const locs = POIS.map(p=>p.coords);
+    const bounds = locs.reduce((b,c)=>b.extend(c), new mapboxgl.LngLatBounds(locs[0], locs[0]));
+    map.fitBounds(bounds, { padding: 80 });
+  });
 
-// === Sidebar toggle ===
-document.getElementById('btn-toggle-sidebar').addEventListener('click', () => {
-  const sb = document.getElementById('sidebar');
-  sb.style.display = (sb.style.display === 'none') ? 'flex' : 'none';
-});
+  // Geolocate
+  document.getElementById('locate').addEventListener('click', ()=>{
+    if(!navigator.geolocation) return alert('Geolocalización no soportada.');
+    navigator.geolocation.getCurrentPosition(pos=>{
+      const userCoords = [pos.coords.longitude, pos.coords.latitude];
+      if(window._userMarker) window._userMarker.remove();
+      window._userMarker = new mapboxgl.Marker({ color:'#ff7b00' }).setLngLat(userCoords).addTo(map);
+      map.flyTo({ center:userCoords, zoom:14 });
+    });
+  });
 
-// === Modo agregar marcador manual ===
-let addMarkerMode = false;
-const addBtn = document.createElement('button');
-addBtn.textContent = '🖊️ Agregar marcador';
-addBtn.style.position = 'absolute';
-addBtn.style.top = '10px';
-addBtn.style.right = '10px';
-addBtn.style.zIndex = '999';
-document.body.appendChild(addBtn);
+  // Style select
+  document.getElementById('style-select').addEventListener('change', e=> map.setStyle('mapbox://styles/'+e.target.value));
 
-addBtn.addEventListener('click', () => {
-  addMarkerMode = !addMarkerMode;
-  addBtn.style.background = addMarkerMode ? '#4ade80' : '';
-  addBtn.textContent = addMarkerMode ? '🖊️ Click en el mapa...' : '🖊️ Agregar marcador';
-});
+  // Sidebar toggle
+  document.getElementById('btn-toggle-sidebar').addEventListener('click', ()=>{
+    const sb = document.getElementById('sidebar'); sb.style.display = (sb.style.display==='none') ? 'flex' : 'none';
+  });
 
-// Solo agrega marcador si el modo está activado
-map.on('click', (e) => {
-  if(!addMarkerMode) return;
-  const coords = [e.lngLat.lng, e.lngLat.lat];
-  new mapboxgl.Marker({ draggable: true })
-    .setLngLat(coords)
-    .setPopup(new mapboxgl.Popup().setHTML(`<strong>Marcador nuevo</strong><br>${coords[1].toFixed(5)}, ${coords[0].toFixed(5)}`))
-    .addTo(map)
-    .togglePopup();
-  addMarkerMode = false;
-  addBtn.textContent = '🖊️ Agregar marcador';
-  addBtn.style.background = '';
-});
+  // Agregar marcador manual (click)
+  const addBtn = document.createElement('button'); addBtn.textContent='🖊️ Agregar marcador'; addBtn.style.position='absolute'; addBtn.style.top='10px'; addBtn.style.right='10px'; addBtn.style.zIndex='999'; document.body.appendChild(addBtn);
+  addBtn.addEventListener('click', ()=>{ addMarkerMode = !addMarkerMode; addBtn.style.background = addMarkerMode ? '#4ade80' : ''; addBtn.textContent = addMarkerMode ? '🖊️ Click en el mapa...' : '🖊️ Agregar marcador'; });
 
-// === Cargar POIs iniciales ===
-map.on('load', () => {
-  loadPOIs();
-  const bounds = POIS.reduce((b, p) => b.extend(p.coords), new mapboxgl.LngLatBounds(POIS[0].coords, POIS[0].coords));
-  map.fitBounds(bounds, { padding: 80 });
-});
+  map.on('click', (e)=>{
+    if(measureMode){
+      measurePoints.push([e.lngLat.lng, e.lngLat.lat]); drawMeasure(); return;
+    }
+    if(!addMarkerMode) return;
+    const coords = [e.lngLat.lng, e.lngLat.lat];
+    const id = 'user_' + Date.now();
+    const title = prompt('Título del marcador','Marcador nuevo') || 'Marcador nuevo';
+    const desc = prompt('Descripción','') || '';
+    const newPoi = { id, title, category:'user', coords, desc };
+    POIS.push(newPoi); savePOIs(); loadPOIsOnMap(); addMarkerMode=false; addBtn.textContent='🖊️ Agregar marcador'; addBtn.style.background='';
+  });
+
+  // Remove POI
+  function removePOI(id){ POIS = POIS.filter(p=>p.id!==id); savePOIs(); loadPOIsOnMap(); }
+
+  // Modal edit
+  let editingId = null;
+  function openEditModal(id){ editingId = id; const poi = POIS.find(p=>p.id===id); if(!poi) return; mTitle.value = poi.title; mDesc.value = poi.desc||''; modal.classList.add('open'); modal.setAttribute('aria-hidden','false'); }
+  mCancel.addEventListener('click', ()=>{ modal.classList.remove('open'); modal.setAttribute('aria-hidden','true'); editingId=null; });
+  mSave.addEventListener('click', ()=>{
+    if(!editingId) return; const idx = POIS.findIndex(p=>p.id===editingId); if(idx===-1) return; POIS[idx].title = mTitle.value; POIS[idx].desc = mDesc.value; savePOIs(); loadPOIsOnMap(); modal.classList.remove('open'); modal.setAttribute('aria-hidden','true'); editingId=null;
+  });
+
+  // Export / Import markers
+  document.getElementById('btn-export').addEventListener('click', ()=>{
+    const data = JSON.stringify(POIS, null, 2); const blob = new Blob([data],{type:'application/json'}); const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href=url; a.download='mis_pois.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  });
+  document.getElementById('btn-import').addEventListener('click', ()=>{
+    const input = document.createElement('input'); input.type='file'; input.accept='application/json'; input.onchange = ()=>{
+      const f = input.files[0]; if(!f) return; const reader = new FileReader(); reader.onload = ()=>{ try{ const arr = JSON.parse(reader.result); if(Array.isArray(arr)){ POIS = arr; savePOIs(); loadPOIsOnMap(); renderFilters(); alert('Importado correctamente'); }else alert('Archivo inválido'); }catch(e){ alert('Error al leer archivo'); } }; reader.readAsText(f);
+    }; input.click();
+  });
+
+  // Share view
+  document.getElementById('btn-share').addEventListener('click', ()=>{
+    const c = map.getCenter(); const z = map.getZoom(); const url = `${location.origin}${location.pathname}?lng=${c.lng.toFixed(5)}&lat=${c.lat.toFixed(5)}&z=${z.toFixed(2)}`;
+    navigator.clipboard?.writeText(url).then(()=> alert('Enlace copiado al portapapeles'), ()=> prompt('Copia manualmente:',url));
+  });
+
+  // On load, parse URL params
+  function parseURLView(){ const params = new URLSearchParams(location.search); const lng = parseFloat(params.get('lng')); const lat = parseFloat(params.get('lat')); const z = parseFloat(params.get('z')); if(!isNaN(lng)&&!isNaN(lat)) map.setCenter([lng,lat]); if(!isNaN(z)) map.setZoom(z);
+  }
+
+  // Measure tool
+  document.getElementById('btn-measure').addEventListener('click', ()=>{
+    measureMode = !measureMode; measurePoints = []; document.getElementById('btn-measure').classList.toggle('active', measureMode);
+    if(!measureMode) { removeMeasure(); }
+  });
+  function drawMeasure(){ removeMeasure(); if(measurePoints.length<1) return; const id='measure-line'; map.addSource(id,{ type:'geojson', data:{ type:'Feature', geometry:{ type:'LineString', coordinates:measurePoints }}});
+    map.addLayer({ id:id, type:'line', source:id, paint:{ 'line-width':3, 'line-color':'#ff7b00' }});
+    // add distance label
+    const dist = turfLength(measurePoints); const last = measurePoints[measurePoints.length-1]; const el = document.createElement('div'); el.className='marker-mini'; el.textContent = dist + ' km'; const m = new mapboxgl.Marker({ element:el, anchor:'bottom' }).setLngLat(last).addTo(map); m._measure = true; // flag
+  }
+  function removeMeasure(){ try{ if(map.getLayer('measure-line')) map.removeLayer('measure-line'); if(map.getSource('measure-line')) map.removeSource('measure-line'); }catch(e){} // remove measure markers
+    document.querySelectorAll('.mapboxgl-marker').forEach(n=>{ if(n._measure) n.remove(); });
+  }
+
+  // turf length helper (simple haversine cumulative) -> returns km rounded
+  function turfLength(coords){ if(coords.length<2) return '0.00'; let total=0; for(let i=1;i<coords.length;i++){ total += haversine(coords[i-1], coords[i]); } return total.toFixed(2); }
+  function haversine(a,b){ const R=6371; const toR = Math.PI/180; const dlat=(b[1]-a[1])*toR; const dlng=(b[0]-a[0])*toR; const lat1=a[1]*toR; const lat2=b[1]*toR; const sinDlat=Math.sin(dlat/2); const sinDlng=Math.sin(dlng/2); const h = sinDlat*sinDlat + Math.cos(lat1)*Math.cos(lat2)*sinDlng*sinDlng; return 2*R*Math.asin(Math.sqrt(h)); }
+
+  // Routing: basic Mapbox Directions v5 (walking/driving)
+  async function routeTo(destCoords){ if(!navigator.geolocation) return alert('Activa geolocalización para rutas'); navigator.geolocation.getCurrentPosition(async pos=>{
+    const start = [pos.coords.longitude, pos.coords.latitude]; const end = destCoords;
+    const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${start[0]},${start[1]};${end[0]},${end[1]}?geometries=geojson&overview=full&access_token=${mapboxgl.accessToken}`;
+    try{ const res = await fetch(url); const data = await res.json(); if(!data.routes||!data.routes.length) return alert('No route found'); const geom = data.routes[0].geometry; // draw
+      if(map.getLayer(routeLayerId)) map.removeLayer(routeLayerId); if(map.getSource(routeLayerId)) map.removeSource(routeLayerId);
+      map.addSource(routeLayerId,{ type:'geojson', data:{ type:'Feature', geometry: geom }});
+      map.addLayer({ id:routeLayerId, type:'line', source:routeLayerId, paint:{ 'line-width':6, 'line-color':'#3b82f6' }});
+      map.fitBounds(geom.coordinates.reduce((b,c)=>b.extend(c), new mapboxgl.LngLatBounds(geom.coordinates[0], geom.coordinates[0])),{ padding:60 });
+    }catch(e){ console.error(e); alert('Error al calcular ruta'); }
+  }, ()=>alert('No se obtuvo ubicación'));
+  }
+
+  // small helpers
+  function generateId(title){ return title.toLowerCase().replace(/[^a-z0-9]+/g,'_')+'_'+Date.now(); }
+
+  // Export current markers as geojson?
+
+  // Keyboard shortcuts
+  window.addEventListener('keydown',(e)=>{
+    if(e.key === '/') { e.preventDefault(); searchInput.focus(); }
+    if(e.key === 'f') { document.getElementById('btn-fit').click(); }
+  });
+
+  // init
+  map.on('load', ()=>{
+    loadSavedPOIs(); parseURLView(); loadPOIsOnMap(); renderFilters();
+    // set initial bounds
+    try{ const locs = POIS.map(p=>p.coords); const bounds = locs.reduce((b,p)=>b.extend(p), new mapboxgl.LngLatBounds(locs[0], locs[0])); map.fitBounds(bounds, { padding:80 }); }catch(e){}
+  });
+
+  // Save on unload
+  window.addEventListener('beforeunload', ()=> savePOIs());
+
+  // small polyfill: ensure mapboxgl.Popup().setDOMContent exists in this environment - it does.
