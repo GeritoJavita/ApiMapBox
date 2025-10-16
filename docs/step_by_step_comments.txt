@@ -1,0 +1,176 @@
+Comentarios paso a paso para js/app.js (en español)
+
+Este documento describe, línea por línea y por segmentos funcionales, la lógica de `js/app.js` del proyecto ApiMapBox. Está pensado para ser lo más claro y exhaustivo posible: cada bloque o función se explica con su propósito, entradas, salidas y comportamiento interno.
+
+---
+1) Configuración inicial y constantes
+
+- mapboxgl.accessToken = '...';
+  - Explicación: asigna la clave pública de Mapbox requerida para todas las llamadas a la librerÃ­a Mapbox GL JS. Sin este token, el mapa no cargará.
+
+- const map = new mapboxgl.Map({...});
+  - Explicación: crea el objeto del mapa con parámetros: contenedor, estilo, centro y zoom inicial. Este objeto expone métodos para manejar marcadores, popups, eventos y vistas.
+
+- Variables del DOM: const listEl = document.getElementById('poi-list') etc.
+  - Explicación: referencias a elementos HTML usados para renderizar lista de POIs, barra de búsqueda, botones, modal, etc. Son la conexión entre la UI y la lógica.
+
+- let POIS = [];
+  - Explicación: array en memoria que actúa como fuente de verdad para todos los puntos de interés (POIs). Cada POI tiene al menos { id, title, description, lngLat }.
+
+---
+2) Función loadSaved()
+
+- Propósito: cargar los POIs guardados en localStorage bajo la clave `pois_v2` y asignarlos a `POIS`.
+- Paso a paso:
+  1. const raw = localStorage.getItem('pois_v2');
+     - Lee la cadena JSON guardada en el almacenamiento local del navegador. Puede devolver null si no existe.
+  2. if (!raw) return; 
+     - Si no hay datos guardados, sale sin modificar `POIS`.
+  3. try { POIS = JSON.parse(raw); } catch (e) { console.error(...); } 
+     - Intenta parsear la cadena JSON. Si falla, captura el error y no sobreescribe `POIS` con datos inválidos.
+
+- Salida: `POIS` contiene los POIs previamente guardados; no devuelve valor.
+
+---
+3) Función savePOIs()
+
+- Propósito: serializar `POIS` y guardarlo en localStorage para persistencia entre sesiones.
+- Paso a paso:
+  1. const data = JSON.stringify(POIS);
+     - Convierte el array de POIs a una cadena JSON.
+  2. localStorage.setItem('pois_v2', data);
+     - Almacena la cadena bajo la clave `pois_v2`.
+
+- Nota: Si `POIS` contiene objetos circulares (no ocurre aquí), JSON.stringify fallaría.
+
+---
+4) Función createMarker(poi)
+
+- Propósito: crear un marcador visual en el mapa para un POI y asociarle un popup con acciones Editar/Borrar.
+- Entrada: `poi` — objeto con campos como { id, title, description, lngLat }
+- Paso a paso:
+  1. const el = document.createElement('div');
+     - Crea un elemento DOM personalizado para usar como icono del marcador.
+  2. el.className = 'marker';
+     - Asigna la clase CSS para estilizar el marcador.
+  3. const popupHtml = `<h3>...</h3>...` con botones que llaman `editPOI(id)` y `deletePOI(id)`;
+     - Construye el HTML del popup. Importante: estos botones usan handlers globales `window.editPOI` y `window.deletePOI` para interactuar con el flujo de edición y borrado desde el popup.
+  4. const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(popupHtml);
+     - Crea el popup asociado al marcador.
+  5. const marker = new mapboxgl.Marker(el).setLngLat(poi.lngLat).setPopup(popup).addTo(map);
+     - Crea y añade el marcador al mapa, posicionándolo y ligando el popup.
+
+- Retorna un objeto con { id: poi.id, marker, poi } para permitir su gestión posterior.
+
+---
+5) Función renderMarkers()
+
+- Propósito: (re)dibujar todos los marcadores en el mapa a partir de `POIS`.
+- Paso a paso:
+  1. Limpiar marcadores actuales (si existe un array `MARKERS`) removiéndolos del mapa.
+  2. Recorrer `POIS` y para cada uno llamar `createMarker(poi)`.
+  3. Guardar la referencia de cada marcador creado en `MARKERS`.
+  4. Llamar a `renderList()` para sincronizar la lista lateral con los marcadores visibles.
+
+- Nota: Mantener `MARKERS` sincronizado evita duplicados y hace posible eliminar marcadores individuales.
+
+---
+6) Función renderList()
+
+- Propósito: poblar el contenedor lateral (`poi-list`) con las tarjetas/filas representando cada POI.
+- Paso a paso:
+  1. listEl.innerHTML = '';
+     - Vacía la lista antes de re-renderizar.
+  2. POIS.forEach(poi => { const row = document.createElement('div'); row.innerHTML = `...`; listEl.appendChild(row); });
+     - Por cada POI crea un nodo con título, descripción y un botón "Ir" que, al hacer click, realiza `map.flyTo({ center: poi.lngLat, zoom: 15 })`.
+  3. Los botones usan `data-id` para identificar a qué POI se refieren y eventos delegados o inline handlers para disparar la acción "Ir".
+
+---
+7) Búsqueda (geocoding) y resultado temporal
+
+- Propósito: permitir al usuario buscar direcciones/lugares usando la API de Geocoding de Mapbox y mostrar resultados clicables.
+- Paso a paso:
+  1. El input de búsqueda escucha `input` o `keydown` y, cuando hay texto, hace `fetch` a `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxgl.accessToken}`.
+  2. Cuando llegan los resultados, se parsean y se generan filas temporales bajo la lista de búsqueda con la información del lugar (place_name, coordinates).
+  3. Al hacer click en un resultado, el mapa realiza `flyTo` hacia las coordenadas y se crea un marcador temporal (sin persistir) para previsualizar la ubicación. Si el usuario decide guardar, se crea un POI persistente desde esa coordenada.
+
+---
+8) Manejo de añadir POI (modo "add")
+
+- Propósito: permitir al usuario agregar un nuevo POI haciendo click en el mapa.
+- Paso a paso:
+  1. Un botón "Add" alterna el modo de añadir (variable booleana `adding`).
+  2. Mientras `adding === true`, la app escucha el evento `map.on('click', (e) => {...})`.
+  3. Al hacer click en el mapa se obtiene `e.lngLat` con las coordenadas y se solicita al usuario (prompt o modal) un título y descripción.
+  4. Si el usuario provee datos, se crea un objeto `poi = { id: generateId(), title, description, lngLat: [lng, lat] }` y se hace `POIS.push(poi); savePOIs(); renderMarkers();`.
+  5. Se desactiva el modo `adding` si así lo desea la UI.
+
+- Nota: el flujo puede usar un modal en lugar de prompt para mejor UX; en ese caso, el modal se rellena y confirma la creación.
+
+---
+9) Editar POI (window.editPOI)
+
+- Propósito: abrir el modal con los datos del POI seleccionado para permitir su edición.
+- Paso a paso:
+  1. La función recibe `id` y busca `const poi = POIS.find(p => p.id === id);`.
+  2. Rellena el modal con `m-title.value = poi.title; m-desc.value = poi.description;` y guarda `editingId = id`.
+  3. Al pulsar "Guardar" en el modal, se valida el contenido y se actualiza `poi.title`, `poi.description`.
+  4. Se ejecuta `savePOIs(); renderMarkers(); modal.hide();` para aplicar cambios visuales y persistirlos.
+
+---
+10) Borrar POI (window.deletePOI)
+
+- Propósito: eliminar un POI y su marcador asociado.
+- Paso a paso:
+  1. Recibe `id` y hace `POIS = POIS.filter(p => p.id !== id);` para removerlo del array.
+  2. Llama a `savePOIs(); renderMarkers();` para persistir y actualizar la UI.
+  3. Si existe un marker abierto o popup, se cierra si corresponde.
+
+---
+11) Exportar e Importar POIs
+
+- Exportar:
+  1. Al presionar "Export", se crea `const blob = new Blob([JSON.stringify(POIS, null, 2)], { type: 'application/json' });`
+  2. Se crea un enlace temporal `a` con `URL.createObjectURL(blob)` y se dispara `a.click()` para descargar el fichero `pois.json`.
+
+- Importar:
+  1. Un input file escucha cambios; al seleccionar un archivo se lee con `FileReader`
+  2. `reader.onload` parsea `JSON.parse(event.target.result)` y valida que sea un array de POIs.
+  3. Si válido, reemplaza o concatena los POIS (según decisión del código), luego `savePOIs(); renderMarkers();`.
+
+---
+12) Controles de UI adicionales
+
+- Botón "Fit": calcula bounds de todos los POIs con `LngLatBounds` y llama `map.fitBounds(bounds, { padding: 50 })`.
+- Botón "Locate": usa `navigator.geolocation.getCurrentPosition` para centrar el mapa en la ubicación del usuario y agrega un marcador de ubicación.
+- Selector de estilos: cambia `map.setStyle(...)` con el `value` seleccionado para alternar entre estilos (streets, satellite, dark...)
+- Sidebar toggle: muestra/oculta la lista lateral ajustando clases en el DOM.
+
+---
+13) Inicialización en map.on('load')
+
+- Propósito: al cargar el mapa, restaurar el estado guardado y renderizar marcadores.
+- Paso a paso:
+  1. map.on('load', () => { loadSaved(); renderMarkers(); });
+  2. Esto asegura que cuando el mapa esté completamente inicializado, se muestren los marcadores y la lista.
+
+---
+14) Notas sobre idempotencia y edge-cases
+
+- Duplicados: si no se evita, importar o añadir varias veces puede crear duplicados con distinto id.
+- Validación: inputs deben ser validados (no-empty title, lngLat válido).
+- Offline: la búsqueda con geocoding requiere red y token válido.
+- Errores en JSON guardado: loadSaved() maneja parse errors para no romper la app.
+
+---
+15) Ejemplo de estructura de un POI
+
+{
+  id: 'poi_abc123',
+  title: 'Plaza Central',
+  description: 'Un punto céntrico para pruebas',
+  lngLat: [ -58.3816, -34.6037 ]
+}
+
+---
+Fin del documento. Si quieres el mismo contenido en Markdown o en otro idioma, lo genero ahora.
