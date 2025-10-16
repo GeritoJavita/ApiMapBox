@@ -1,0 +1,127 @@
+=== Comentarios extraídos de js/app.js ===
+
+// === CONFIG ===
+
+// Estado
+// {id, marker, popup, poi}
+
+// DOM refs
+
+// === MAP ===
+
+// restore POIs from localStorage if any
+// Carga los POIs guardados desde localStorage.
+// - Intenta leer la clave 'my_pois_v1' y parsearla como JSON.
+// - Si existe y es válido, asigna el contenido a la variable global POIS.
+// - Si no existe o hay un error de parseo, restaura la lista por defecto (DEFAULT_POIS).
+// Esto permite persistir marcadores entre sesiones del navegador.
+
+// Guarda el arreglo global POIS en localStorage bajo la clave 'my_pois_v1'.
+// Se utiliza JSON.stringify para serializar los objetos antes de almacenarlos.
+
+// Marker creation with edit/delete actions
+// Crea un marcador (Marker) y su Popup asociado para un POI dado.
+// - Construye el elemento DOM del marcador (ícono según categoría).
+// - Crea un popup con título, descripción y botones de acción: Ruta, Editar y Eliminar.
+// - Añade el marker al mapa y lo hace arrastrable (draggable).
+// - Al terminar de arrastrar, actualiza las coordenadas del POI en POIS y persiste los cambios.
+// Devuelve un objeto con { id, marker, popup, poi } para almacenarlo en la lista de marcadores.
+
+// Contenido del popup con título y descripción
+
+// Botón para calcular y mostrar la ruta hasta este POI
+
+// Botón para abrir el modal de edición
+
+// Botón para eliminar el POI (pide confirmación)
+
+// Al soltar el marker arrastrado, actualizar las coordenadas en POIS y guardar
+
+// Elimina todos los marcadores actualmente visibles y vuelve a crearlos
+// a partir del arreglo POIS. También actualiza la lista lateral llamando
+// a renderPOIList.
+
+// Renderiza la lista lateral de POIs.
+// - Filtra por activeFilters si hay filtros activos.
+// - Por cada POI crea un elemento con icono, título, descripción y botones 'Ir' e 'Info'.
+// - Los botones están enlazados por delegación de eventos en listEl.
+
+// Delegación de eventos para los botones dentro de la lista lateral:
+// - 'Ir' centra el mapa en el POI correspondiente.
+// - 'Info' abre el popup del marcador correspondiente.
+
+// Centra el mapa en el POI identificado por 'id' y abre su popup.
+// Utiliza map.flyTo para una transición suave y fija un zoom cercano.
+
+// Filters UI
+
+// Genera la UI de filtros a partir de las categorías únicas presentes en POIS.
+// Al hacer click en un chip se alterna el filtro correspondiente en el Set activeFilters
+// y se vuelve a renderizar la lista lateral.
+
+// Buscador (geocoding simple + autocompletado)
+
+// Control del input de búsqueda con debounce y llamada al servicio de Geocoding de Mapbox.
+// - Al escribir espera 300ms (debounce) y solicita resultados limitados cerca del centro del mapa.
+// - Mapea cada resultado a un elemento en la lista; al pulsarlo centra el mapa y coloca un marcador temporal.
+
+// Fit all button
+
+// Geolocate
+// Solicita la posición del usuario y coloca un marcador (si se obtiene).
+
+// Style select
+
+// Sidebar toggle
+
+// Agregar marcador manual (click)
+
+// Click sobre el mapa:
+// - Si está en modo de medición (measureMode), añade un punto y redibuja la línea de medida.
+// - Si está en modo 'agregar marcador' (addMarkerMode), solicita título/descripcion y crea un nuevo POI.
+
+// Elimina un POI por su id: actualiza POIS, persiste y recarga los marcadores en el mapa.
+
+// Modal de edición:
+// - openEditModal(id): abre el modal y carga los datos del POI seleccionado en los campos.
+// - mCancel: cierra el modal sin guardar.
+// - mSave: guarda los cambios en POIS, persiste y recarga la vista.
+
+// Exporta e importa marcadores como archivo JSON.
+// - Export: descarga un archivo llamado 'mis_pois.json' con el contenido de POIS.
+// - Import: permite seleccionar un archivo JSON, valida que sea un arreglo y lo carga como POIS.
+
+// Compartir la vista actual del mapa: construye una URL con parámetros lng/lat/z y la copia al portapapeles.
+
+// Analiza parámetros de la URL (?lng=&lat=&z=) y ajusta la vista inicial del mapa si están presentes.
+
+// Herramienta de medición: permite añadir puntos en el mapa y mostrar la distancia acumulada.
+
+// añade una etiqueta con la distancia total (km) en el último punto
+
+// remove measure markers
+
+// Calcula la longitud acumulada de una línea definida por coordenadas (km).
+// Implementación simple que suma distancias entre pares contiguos usando la fórmula de Haversine.
+
+// Haversine: distancia entre dos puntos geográficos en kilómetros.
+
+// Calcula y dibuja una ruta desde la ubicación actual del usuario hasta destCoords
+// usando la API de Directions de Mapbox (aquí configurada con 'driving').
+// - Requiere permiso de geolocalización.
+// - Dibuja la línea de ruta en el mapa y ajusta los bounds para que sea visible.
+
+// Helpers pequeños
+// generateId: genera un id a partir del título (sanitizado) y un sufijo con timestamp
+
+// Export current markers as geojson?
+
+// Keyboard shortcuts
+
+// init
+// Inicialización principal: cargar POIs, parsear URL, renderizar marcadores y filtros.
+// Ajusta bounds iniciales al conjunto de POIs si es posible
+
+// Save on unload
+
+// small polyfill: ensure mapboxgl.Popup().setDOMContent exists in this environment - it does.
